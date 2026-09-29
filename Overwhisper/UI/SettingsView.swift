@@ -343,6 +343,14 @@ struct TranscriptionSettingsView: View {
 
             if isUsingOpenAI {
                 Section {
+                    TextField("Base URL", text: $appState.openAIBaseURL, prompt: Text(OpenAIEngine.defaultBaseURL))
+                        .textFieldStyle(.roundedBorder)
+                        .autocorrectionDisabled()
+
+                    TextField("Model", text: $appState.openAIModel, prompt: Text(OpenAIEngine.defaultModel))
+                        .textFieldStyle(.roundedBorder)
+                        .autocorrectionDisabled()
+
                     SecureField("API Key", text: $appState.openAIAPIKey)
                         .textFieldStyle(.roundedBorder)
 
@@ -354,7 +362,7 @@ struct TranscriptionSettingsView: View {
                 } header: {
                     Text("API Credentials")
                 } footer: {
-                    Text("Stored in your macOS Keychain.")
+                    Text("Any OpenAI-compatible server works: enter its API root (e.g. https://host/v1). The key is stored in your macOS Keychain.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

@@ -300,6 +300,12 @@ class AppState: ObservableObject {
     @Published var textReplacements: String {
         didSet { UserDefaults.standard.set(textReplacements, forKey: "textReplacements") }
     }
+    @Published var openAIBaseURL: String {
+        didSet { UserDefaults.standard.set(openAIBaseURL, forKey: "openAIBaseURL") }
+    }
+    @Published var openAIModel: String {
+        didSet { UserDefaults.standard.set(openAIModel, forKey: "openAIModel") }
+    }
     @Published var openAIAPIKey: String {
         didSet {
             try? KeychainHelper.save(key: "openAIAPIKey", data: openAIAPIKey.data(using: .utf8) ?? Data())
@@ -440,6 +446,8 @@ class AppState: ObservableObject {
         self.enableCloudFallback = UserDefaults.standard.bool(forKey: "enableCloudFallback")
         self.customVocabulary = UserDefaults.standard.string(forKey: "customVocabulary") ?? ""
         self.textReplacements = UserDefaults.standard.string(forKey: "textReplacements") ?? ""
+        self.openAIBaseURL = UserDefaults.standard.string(forKey: "openAIBaseURL") ?? OpenAIEngine.defaultBaseURL
+        self.openAIModel = UserDefaults.standard.string(forKey: "openAIModel") ?? OpenAIEngine.defaultModel
 
         if let apiKeyData = try? KeychainHelper.load(key: "openAIAPIKey"),
            let apiKey = String(data: apiKeyData, encoding: .utf8) {
@@ -605,6 +613,8 @@ class AppState: ObservableObject {
         enableCloudFallback = false
         customVocabulary = ""
         textReplacements = ""
+        openAIBaseURL = OpenAIEngine.defaultBaseURL
+        openAIModel = OpenAIEngine.defaultModel
         playSoundOnCompletion = true
         playSoundOnStart = false
         showNotificationOnError = true

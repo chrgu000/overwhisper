@@ -61,7 +61,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Sparkle can't start without a real app bundle — starting it from a
         // bare dev binary throws up a "failed to start updater" alert.
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: !AppEnvironment.isDevBuild,
+            // Fork build: never auto-update from upstream's appcast.
+            startingUpdater: false,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
@@ -209,12 +210,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.errorMenuItem = errorItem
 
         menu.addItem(NSMenuItem.separator())
-
-        if !AppEnvironment.isDevBuild {
-            let updateItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates), keyEquivalent: "")
-            updateItem.image = NSImage(systemSymbolName: "arrow.down", accessibilityDescription: "Update")
-            menu.addItem(updateItem)
-        }
 
         menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem.separator())
@@ -378,6 +373,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        // OpenAIEngine captures its settings at creation, so rebuild it when any of them change.
+        Publishers.MergeMany(
+            appState.$openAIBaseURL.dropFirst().map { _ in () }.eraseToAnyPublisher(),
+            appState.$openAIModel.dropFirst().map { _ in () }.eraseToAnyPublisher(),
+            appState.$openAIAPIKey.dropFirst().map { _ in () }.eraseToAnyPublisher(),
+            appState.$language.dropFirst().map { _ in () }.eraseToAnyPublisher(),
+            appState.$translateToEnglish.dropFirst().map { _ in () }.eraseToAnyPublisher(),
+            appState.$customVocabulary.dropFirst().map { _ in () }.eraseToAnyPublisher()
+        )
+        .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
+        .sink { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.appState.transcriptionEngine == .openAI else { return }
+                self.updateEngineMenuItem()
+                self.launchEngineInitialization()
+            }
+        }
+        .store(in: &cancellables)
+
         appState.$whisperModel
             .dropFirst()
             .sink { [weak self] _ in
@@ -482,7 +496,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .parakeet:
             label = "Parakeet · \(appState.parakeetModel == .v2English ? "v2 English" : "v3 Multilingual")"
         case .openAI:
-            label = "OpenAI · whisper-1"
+            label = "OpenAI · \(appState.openAIModel)"
         }
         item.title = "Engine: \(label)"
     }
@@ -719,7 +733,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 appState.lastError = "Failed to initialize Parakeet: \(error.localizedDescription)"
             }
         case .openAI:
-            transcriptionEngine = OpenAIEngine(apiKey: appState.openAIAPIKey, translateToEnglish: appState.translateToEnglish, customVocabulary: appState.customVocabulary)
+            transcriptionEngine = OpenAIEngine(
+                apiKey: appState.openAIAPIKey,
+                baseURL: appState.openAIBaseURL,
+                model: appState.openAIModel,
+                language: appState.language,
+                translateToEnglish: appState.translateToEnglish,
+                customVocabulary: appState.customVocabulary
+            )
         }
 
         AppLogger.app.info("Engine initialization complete")
@@ -997,7 +1018,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .parakeet:
             modelLabel = appState.parakeetModel.displayName
         case .openAI:
-            modelLabel = "OpenAI whisper-1"
+            modelLabel = "OpenAI \(appState.openAIModel)"
         }
         return (engineType.rawValue, modelLabel)
     }
@@ -1238,7 +1259,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         showNotification(title: "Fallback", body: "Local transcription failed, trying cloud...")
 
         let started = Date()
-        let openAIEngine = OpenAIEngine(apiKey: appState.openAIAPIKey, translateToEnglish: appState.translateToEnglish, customVocabulary: appState.customVocabulary)
+        let openAIEngine = OpenAIEngine(
+            apiKey: appState.openAIAPIKey,
+            baseURL: appState.openAIBaseURL,
+            model: appState.openAIModel,
+            language: appState.language,
+            translateToEnglish: appState.translateToEnglish,
+            customVocabulary: appState.customVocabulary
+        )
 
         do {
             let text = try await openAIEngine.transcribe(audioURL: audioURL)
